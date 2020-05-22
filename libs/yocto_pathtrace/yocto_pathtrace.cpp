@@ -207,13 +207,13 @@ static float compute_contrast_perchannel(float linear_blended, float W){
     }
   }else{
     if(1.0f - linear_blended >= (2.0f * W)/4.0f){
-      S_hat = 1.0f/W * (1.0f - linear_blended - 0.5f) + 0.5;
+      S_hat = 1.0f - (1.0f/W * (1.0f - linear_blended - 0.5f) + 0.5);
     }else if(W >= (2.0f/3.0f)){
-      S_hat = 8 * (1.0f/W - 1.0f) * pow( (1.0f - linear_blended/(2.0f-W)),2 ) + (3.0 - (2.0f/W))*(1.0f - linear_blended/(2.0f-W));
+      S_hat = 1.0f - (8 * (1.0f/W - 1.0f) * pow( (1.0f - linear_blended/(2.0f-W)),2 ) + (3.0 - (2.0f/W))*(1.0f - linear_blended/(2.0f-W)));
     }else if(1.0f - linear_blended >= (2.0f - (3.0f*W))/4.0f){
-      S_hat = 1.0f/pow(W,2) * pow(1.0f - linear_blended - ((2.0f-(3.0f*W))/4),2);
+      S_hat = 1.0f - ( 1.0f/pow(W,2) * pow(1.0f - linear_blended - ((2.0f-(3.0f*W))/4),2));
     }else{
-      S_hat = 0.0f;
+      S_hat = 1.0f;
     } 
   }
 
@@ -346,7 +346,6 @@ static vec3f ProceduralTilingAndBlending(const ptr::texture* texture, const vec2
             lookup_texture(texture, {ii2, jj2}, ldr_as_linear) * u2 * v2;
 
   auto color = exp_weight1 *I1 + exp_weight2 *I2 + exp_weight3 *I3;
-  return color;
   //Compute variance scale factor
   /*auto W = sqrt( pow(exp_weight1,2) + pow(exp_weight2,2) + pow(exp_weight3,2) );
   
@@ -360,8 +359,8 @@ static vec3f ProceduralTilingAndBlending(const ptr::texture* texture, const vec2
   float inv_LUT_G = truncCdf(color.y, 1.0f/6.0f);
   float inv_LUT_B = truncCdf(color.z, 1.0f/6.0f);
 
-  return color ;
-  //return color;*/
+  return {inv_LUT_R, inv_LUT_G, inv_LUT_B} ;*/
+  return color;
 }
 
 void ComputeTinput(ptr::material* material, ptr::texture* texture, int channel)
@@ -2199,7 +2198,7 @@ void gaussianization(ptr::material* material, ptr::texture* texture){
   texture->LUT.assign(texture_size(texture), zero3f);
   for(auto h=0; h<height; h++){
     for(auto w=0; w<width; w++){
-      texture->colorf[{h,w}] = byte_to_float(texture->colorb[{h,w}]); 
+      texture->colorf[{h,w}] = srgb_to_rgb(byte_to_float(texture->colorb[{h,w}])); 
     }
   }
 
