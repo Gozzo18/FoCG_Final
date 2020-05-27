@@ -1,3 +1,11 @@
+To execute imageDisplayer:
+
+1) Go in the out folder
+
+2)g++ -W -Wall -pedantic -o main -p apps/imageDisplayer/imageDisplayer.cpp -lstdc++fs -lopencv_highgui -lopencv_imgcodecs -lopencv_core
+
+3)Execute ./main
+
 # Yocto/PathExtension: Tiny Path Tracer Extension
 
 In this homework, you will implement a new path tracing feature from scratch
