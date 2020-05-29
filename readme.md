@@ -38,8 +38,20 @@ The algorithm starts at line 2147 and it is implemented as follows (steps are pe
 
 - Add the attribute LUT to the Texture struct (inside *yocto_pathtrace.h*) and fill it with the values previously computed. 
 
-The idea behind texture gaussianization is to make the histogram's channels of the image to follow a gaussian distribution. This should prevent the blending operation to produce unwanted color artifacts. 
+The idea behind texture gaussianization is to make the histogram's channels of the image to follow a gaussian distribution. This should prevent the blending operation to produce unwanted color artifacts. Here some examples obtained:
 
+![Image](images/texture_gaussianization3.png)
+
+![Image](images/texture_gaussianization2.png)
+
+![Image](images/texture_gaussianization1.png)
+
+From left to right we have:
+- The first image is the one obtained with the Yocto/GL implementation of the previous algorithm. It is possible to notice two things. The first one is that the patches of the original texture can be easily detected. The second is that the channels' histograms seems not to be completely gaussian. We believe that this might due to the fact that we are manipulating the texture through linear blending.
+- The second image is the original texture used. Notice that the channels' histograms are not gaussian at all. 
+- The third image was produced in order to prove that the first image is correct. These images are infact obtained in the same identical way to the original but without applying them to an object.
+
+We conclude by pointing out that in the main reference paper, the texture gaussianization is applied only on one channel rather than in all of three.
 
 
 
