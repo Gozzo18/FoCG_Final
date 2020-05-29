@@ -92,21 +92,9 @@ void init_scene(ptr::scene* scene, sio::model* ioscene, ptr::camera*& camera,
     auto material = add_material(scene);
     
     if(iomaterial->name == "floor"){
-      /*if(!iomaterial->color_tex->colorb.empty()){
-        //Convert pixel byte to floats for floor texture
-        iomaterial->color_tex->colorf.assign(iomaterial->color_tex->colorb.size(), zero3f);
-        for(auto height=0; height<iomaterial->color_tex->colorb.size().y; height++){
-          for(auto width=0; width<iomaterial->color_tex->colorb.size().x; width++){
-            iomaterial->color_tex->colorf[{height,width}] = byte_to_float(iomaterial->color_tex->colorb[{height, width}]); 
-          }
-        }
-      }*/
-          
       //Gaussianize texture
       texture_gaussianization(material, texture_map.at(iomaterial->color_tex));
     }
-
-
     set_emission(material, iomaterial->emission,
         texture_map.at(iomaterial->emission_tex));
     set_color(

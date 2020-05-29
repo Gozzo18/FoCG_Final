@@ -14,14 +14,34 @@ In this project we will present a possible implementation of how Texture Synthes
 We will provide first a small introduction about what Texture Synthesis is and how it can be effectively confronted. We will then illustrate our implementation and the results obtained with the help of some images.
 
 ## Introduction
-Texture mapping is that method that allows to map the pixels of a texture to a 3D surface. Independently from the available resources, being able to create highly realistic scenes with many elements and high-resolution textures is always very difficult. Most of the time infact, textures are hand-painted and therefore small in size. To avoid repetitions many techniques have been developed, each of them with its own advantages and disadvantages. We do not only look for photo-realistic results, but we would also like to work with very fast methods. 
+Texture mapping is that method that allows to map the pixels of a texture to a 3D surface. Independently from the available resources, being able to create highly realistic scenes with many elements and high-resolution textures is always very difficult. Most of the time infact, textures are hand-painted and therefore small in size. If not properly handled, it will be possible to notice every single patch of the original texture applied to the object. To avoid this effect many techniques have been developed, combine two or multiple layers of the same texture with slight offsets, use random noise function to obtain different patterns or resynthesize similar looking textures. In any case we always look for methods that are fast and that can produce photo-realistic results.
 
-Texture Synthesis is indeed one of the processes involved in generating large images starting from small ones. *Perlin* or *Worley* noise are probably the oldest methods that tried to achieve procedural textures by exploiting **noise functions**. But using those methods for real-time renderings it's a very bad choiche since their speed perfomances are very poor. That's why in 2018, Eric Heitz and Fabrice Neyret proposed a novel way to generate good-looking large texture in a very short time.
+Texture Synthesis is another possible method involved in generating large images starting from small ones. *Perlin* or *Worley* noise are probably the oldest methods that tried to achieve procedural textures by exploiting **noise functions**. But using those methods for real-time renderings it's a very bad choiche since their speed perfomances are very poor. That's why in 2018, Eric Heitz and Fabrice Neyret proposed a novel way to generate good-looking large texture in a very short time. One year later this method was enhanced to make it more efficient (faster and less memory demanding) but also to address different needs like handling high-resolution textures (4096x4096) and grayscale textures.
 
-### High-Performance By-Example Noise using Histogram-Preserving Blending Operator
-We will only give a very small introduction of this paper in order to lay the foundations for the main reference on which the project is based upon. We can divide this method in two parts: 
-- Tiling and Blending operation
-- Histogram Transformations
+### Implementation
+The way in which this method is implemented is straight-forward. It consists of two main operations:
+
+- Texture Gaussianization
+- Histogram-preserving blending
+
+Both of these operations are the same that were introduced in the original paper but with some relevant differences. 
+
+#### TEXTURE GAUSSIANIZATION
+The first step of the method is to gaussianize the texture immediately after having loaded. This is done in the yscenetrace.cpp (or ysceneitrace.cpp) files when initializing materials. 
+The algorithm starts at line 2147 and it is implemented as follows (steps are per channel):
+
+- Loop over each texel of the texture, normalize the value in the range [0, 255] and update the number of occurence for that particular value inside a vector called *histogram_X* ( with X = {R,G,B} ).
+
+- Loop over the elements in *histogram_X* and update the value of each element *i* as the sum of the current with the previous one *i-1* .
+
+- Construct a 1D lookup table (**LUT**) where each element is computed as the inverse CDF of the input histogram. The LUT will therefore contain a mapping between the normalized texel value and their gaussianized representation.
+
+- Add the attribute LUT to the Texture struct (inside *yocto_pathtrace.h*) and fill it with the values previously computed. 
+
+The idea behind texture gaussianization is to make the histogram's channels of the image to follow a gaussian distribution. This should prevent the blending operation to produce unwanted color artifacts. 
+
+
+
 
 #### TILING AND BLENDING
 The input image is tiled with a equilater-triangle lattice in such a way to obtain a triangle grid. Given a point in the uv space, we can compute the local triangle  to which it belongs and the barycentric coordinates inside of it. By doing this, each point is covered always by three tiles. 
@@ -38,9 +58,7 @@ By simply linearly blending points it will be very likely to generate visual art
 The method illustrated so far is powerful but presents still some problems concerning:
 
 - Speed
-- Dimension of the textures
-- No handle of grayscale textures
-- 3D LUT is inefficient
+
 
 
 

@@ -46,6 +46,8 @@
 #include <future>
 #include <memory>
 
+#include <map>
+
 // -----------------------------------------------------------------------------
 // ALIASES
 // -----------------------------------------------------------------------------
@@ -266,16 +268,6 @@ struct camera {
   float   aperture = 0;
 };
 
-struct PixelSortStruct
-{
-	int x;
-	int y;
-	float value;
-	bool operator < (const PixelSortStruct& other) const{
-		return (value < other.value);
-	}
-};
-
 // Texture containing either an LDR or HDR image. HdR images are encoded
 // in linear color space, while LDRs are encoded as sRGB.
 struct texture {
@@ -285,7 +277,9 @@ struct texture {
   img::image<float> scalarf = {};
   img::image<byte>  scalarb = {};
   img::image<vec3f> LUT = {};
-  img::image<vec3f> inv_LUT = {};
+  std::vector<int> histogram_R = {};
+  std::vector<int> histogram_G = {};
+  std::vector<int> histogram_B = {};
 
 };
 
@@ -312,6 +306,7 @@ struct material {
   // textures
   ptr::texture* emission_tex     = nullptr;
   ptr::texture* color_tex        = nullptr;
+  ptr::texture* gauss_tex        = nullptr;
   ptr::texture* histogram        = nullptr;
   ptr::texture* specular_tex     = nullptr;
   ptr::texture* metallic_tex     = nullptr;

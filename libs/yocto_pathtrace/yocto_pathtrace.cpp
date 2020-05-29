@@ -31,6 +31,8 @@
 #include <yocto/yocto_shape.h>
 
 #include <iostream>
+#include <set>
+#include <map>
 
 #include <atomic>
 #include <deque>
@@ -103,6 +105,28 @@ static vec2i texture_size(const ptr::texture* texture) {
   }
 }
 
+float derf(float x) {
+    return 2.0/sqrt(math::pif)*exp(-x*x);
+}
+
+float custom_erf(float x){
+
+    auto a1 =  0.254829592f;
+    auto a2 = -0.284496736f;
+    auto a3 =  1.421413741f;
+    auto a4 = -1.453152027f;
+    auto a5 =  1.061405429f;
+    auto p  =  0.3275911f;
+
+    auto sign = x < 0 ? -1 : 1;
+
+    x = abs(x);
+    
+    auto t = 1.0f/(1.0f + p*x);
+    auto y = 1.0f - ((((a5*t + a4)*t + a3)*t + a2)*t + a1)*t*exp(-x*x);
+    
+    return sign*y;
+}
 float erfinv(float x){
 	float w, p;
 	w = -log((1.0f - x) * (1.0f + x));
@@ -133,27 +157,8 @@ float erfinv(float x){
 		p = 2.83297682f + p * w;
 	}
 	return p * x;
+
 }
-
-float custom_erf(float x){
-
-    auto a1 =  0.254829592f;
-    auto a2 = -0.284496736f;
-    auto a3 =  1.421413741f;
-    auto a4 = -1.453152027f;
-    auto a5 =  1.061405429f;
-    auto p  =  0.3275911f;
-
-    auto sign = x < 0 ? -1 : 1;
-
-    x = abs(x);
-    
-    auto t = 1.0f/(1.0f + p*x);
-    auto y = 1.0f - ((((a5*t + a4)*t + a3)*t + a2)*t + a1)*t*exp(-x*x);
-    
-    return sign*y;
-}
-
 float normalization_constant(float sigma) {
   return 1.0f/custom_erf(0.5f / (sigma * sqrt(2.0f)));
 }
@@ -167,15 +172,15 @@ float truncCdf(float x, float sigma){
 }
 
 float truncCdfInv(float x, float sigma){
-  return 0.5f + sqrt(2.0f) * sigma * erfinv((2.0f * x - 1.0f)/normalization_constant(sigma));
+  return 0.5f + sqrt(2) * sigma * erfinv((2.0f * x - 1.0f)/normalization_constant(sigma));
 }
 
 // Evaluate a texture
 static vec3f lookup_texture(
     const ptr::texture* texture, const vec2i& ij, bool ldr_as_linear = false) {
-  /*if(texture->name=="floor"){
+  if(texture->name=="floor"){
     return texture->LUT[ij];  
-  }else*/ if (!texture->colorf.empty()) {
+  }else if (!texture->colorf.empty()) {
     return texture->colorf[ij];
   } else if (!texture->colorb.empty()) {
     return ldr_as_linear ? byte_to_float(texture->colorb[ij])
@@ -201,7 +206,7 @@ static float compute_contrast_perchannel(float linear_blended, float W){
     }else if(W >= (2.0f/3.0f)){
       S_hat = 8 * (1.0f/W - 1.0f) * pow( (linear_blended/(2.0f-W)),2 ) + (3.0 - (2.0f/W))*(linear_blended/(2.0f-W));
     }else if(linear_blended >= (2.0f - (3.0f*W))/4.0f){
-      S_hat = 1.0f/pow(W,2) * pow(linear_blended - ((2.0f-(3.0f*W))/4),2);
+      S_hat = 1.0f/pow(W,2) * pow(linear_blended - ((2.0f-(3.0f*W))/4.0f),2);
     }else{
       S_hat = 0.0f;
     }
@@ -211,12 +216,11 @@ static float compute_contrast_perchannel(float linear_blended, float W){
     }else if(W >= (2.0f/3.0f)){
       S_hat = 1.0f - (8 * (1.0f/W - 1.0f) * pow( (1.0f - linear_blended/(2.0f-W)),2 ) + (3.0 - (2.0f/W))*(1.0f - linear_blended/(2.0f-W)));
     }else if(1.0f - linear_blended >= (2.0f - (3.0f*W))/4.0f){
-      S_hat = 1.0f - ( 1.0f/pow(W,2) * pow(1.0f - linear_blended - ((2.0f-(3.0f*W))/4),2));
+      S_hat = 1.0f - ( 1.0f/pow(W,2) * pow(1.0f - linear_blended - ((2.0f-(3.0f*W))/4.0f),2));
     }else{
       S_hat = 1.0f;
     } 
   }
-
   return S_hat;
 }
 
@@ -322,14 +326,6 @@ static vec3f ProceduralTilingAndBlending(const ptr::texture* texture, const vec2
   auto exp_weight2 = pow(w2,4) / ( pow(w1,4) + pow(w2,4) + pow(w3,4) );
   auto exp_weight3 = pow(w3,4) / ( pow(w1,4) + pow(w2,4) + pow(w3,4) );
 
-  // Fetch input
-  /*auto I1 = lookup_texture(texture, uv1, ldr_as_linear);
-  auto I2 = lookup_texture(texture, uv2, ldr_as_linear);
-  auto I3 = lookup_texture(texture, uv3, ldr_as_linear);
-  
-  // Linear blending
-  auto color =  I1 +  I2 +  I3 ;*/
-
   auto I1 = lookup_texture(texture, {i, j}, ldr_as_linear) * (1 - u) * (1 - v) +
             lookup_texture(texture, {i, jj}, ldr_as_linear) * (1 - u) * v +
             lookup_texture(texture, {ii, j}, ldr_as_linear) * u * (1 - v) +
@@ -347,7 +343,7 @@ static vec3f ProceduralTilingAndBlending(const ptr::texture* texture, const vec2
 
   auto color = exp_weight1 *I1 + exp_weight2 *I2 + exp_weight3 *I3;
   //Compute variance scale factor
-  /*auto W = sqrt( pow(exp_weight1,2) + pow(exp_weight2,2) + pow(exp_weight3,2) );
+  auto W = sqrt( pow(exp_weight1,2) + pow(exp_weight2,2) + pow(exp_weight3,2) );
   
   //Restore contrast
   color.x = compute_contrast_perchannel(color.x, W);
@@ -355,57 +351,16 @@ static vec3f ProceduralTilingAndBlending(const ptr::texture* texture, const vec2
   color.z = compute_contrast_perchannel(color.z, W);
 
   //De-gaussianize
-  float inv_LUT_R = truncCdf(color.x, 1.0f/6.0f);
-  float inv_LUT_G = truncCdf(color.y, 1.0f/6.0f);
-  float inv_LUT_B = truncCdf(color.z, 1.0f/6.0f);
-
-  return {inv_LUT_R, inv_LUT_G, inv_LUT_B} ;*/
+  auto r = max(0, min(255, (int)floor(color.x * 255.0)));
+  color.x = truncCdf( (float)texture->histogram_R[r]/(float)texture->histogram_R[255], 1.0f/6.0f);
+  
+  auto g = max(0, min(255, (int)floor(color.y * 255.0)));
+  color.y = truncCdf( (float)texture->histogram_G[g]/(float)texture->histogram_G[255], 1.0f/6.0f);
+  
+  auto b = max(0, min(255, (int)floor(color.z * 255.0)));
+  color.z = truncCdf( (float)texture->histogram_B[b]/(float)texture->histogram_B[255], 1.0f/6.0f);
+  
   return color;
-}
-
-void ComputeTinput(ptr::material* material, ptr::texture* texture, int channel)
-{	
-	// Sort pixels of example image
-	std::vector<PixelSortStruct> sortedInputValues;
-  auto width = texture_size(texture).x;
-  auto height = texture_size(texture).y;
-
-	sortedInputValues.resize(width * height);
-	for (int y = 0; y < height; y++){
-	  for (int x = 0; x < width; x++){
-		  sortedInputValues[y * width + x].x = x;
-		  sortedInputValues[y * width + x].y = y;
-      if(channel==1){
-  		  sortedInputValues[y * width + x].value = texture->colorf[{y,x}].x;
-      }else if(channel==2){
-        sortedInputValues[y * width + x].value = texture->colorf[{y,x}].y;
-      }else{
-        sortedInputValues[y * width + x].value = texture->colorf[{y,x}].z;      
-      }
-    }
-  }
-	sort(sortedInputValues.begin(), sortedInputValues.end());
-
-	// Assign Gaussian value to each pixel
-	for (unsigned int i = 0; i < sortedInputValues.size() ; i++)
-	{
-		// Pixel coordinates
-		int x = sortedInputValues[i].x;
-		int y = sortedInputValues[i].y;
-		// Input quantile (given by its order in the sorting)
-		float U = (i + 0.5f) / (sortedInputValues.size());
-		// Gaussian quantile
-		float G = truncCdfInv(U, 1.0f/6.0f);
-		// Store
-    if(channel==1){
-		  texture->LUT[{x,y}].x = G;
-    }else if(channel==2){
-      texture->LUT[{x,y}].y = G;
-    }else{
-      texture->LUT[{x,y}].z = G;
-    }
-	}
-  material->color_tex = texture;
 }
 
 // Evaluate a texture
@@ -415,9 +370,9 @@ static vec3f eval_texture(const ptr::texture* texture, const vec2f& uv,
   // get texture
   if (!texture) return {1, 1, 1};
 
-  if(texture->name=="floor"){
-    return ProceduralTilingAndBlending(texture, uv, ldr_as_linear,clamp_to_edge);
-  }else{
+  //if(texture->name=="floor"){
+  //  return ProceduralTilingAndBlending(texture, uv, ldr_as_linear,clamp_to_edge);
+  //}else{
      // get img::image width/height
     auto size = texture_size(texture);
 
@@ -445,7 +400,7 @@ static vec3f eval_texture(const ptr::texture* texture, const vec2f& uv,
            lookup_texture(texture, {i, jj}, ldr_as_linear) * (1 - u) * v +
            lookup_texture(texture, {ii, j}, ldr_as_linear) * u * (1 - v) +
            lookup_texture(texture, {ii, jj}, ldr_as_linear) * u * v;
-  }
+  //}
 }
 
 static float eval_texturef(const ptr::texture* texture, const vec2f& uv,
@@ -2189,82 +2144,113 @@ void set_texture(ptr::texture* texture, const img::image<float>& img, std::strin
   texture->scalarf = img;
 }
 
-void gaussianization(ptr::material* material, ptr::texture* texture){
+ptr::texture* gaussianization(ptr::texture* texture){
 
   auto width = texture_size(texture).x;
   auto height = texture_size(texture).y;
 
-  texture->colorf.assign(texture_size(texture), zero3f);
+  //Initialize LUT texture
   texture->LUT.assign(texture_size(texture), zero3f);
-  for(auto h=0; h<height; h++){
-    for(auto w=0; w<width; w++){
-      texture->colorf[{h,w}] = srgb_to_rgb(byte_to_float(texture->colorb[{h,w}])); 
+  if (!texture->colorf.empty()) {
+    for(auto h=0; h<height; h++){
+      for(auto w=0; w<width; w++){
+        texture->LUT[{h,w}] = texture->colorf[{h,w}];
+      }
+    }
+  } else if (!texture->colorb.empty()) {
+      for(auto h=0; h<height; h++){
+        for(auto w=0; w<width; w++){
+        texture->LUT[{h,w}] = byte_to_float(texture->colorb[{h,w}]); 
+      }
     }
   }
 
-  /*for (auto i=0; i<3; i++){
-    ComputeTinput(material, texture, i);
-  }*/
-  auto sigma = 1.0f/6.0f;
-
-  //For each texel of the input texture compute histogram per channel
-  std::vector <int> histogram_R (256);
-  std::vector <int> histogram_G (256);
-  std::vector <int> histogram_B (256);
-  for(auto h=0; h<height; h++){
-    for(auto w=0; w<width; w++){
-        //Compute CDF of input histogram
-        auto r = (int)(texture->colorf[{h,w}].x * 255);
-        auto g = (int)(texture->colorf[{h,w}].y * 255);
-        auto b = (int)(texture->colorf[{h,w}].z * 255);
-        histogram_R[r]++;
-        histogram_G[g]++;
-        histogram_B[b]++; 
+  //Flatten image
+  std::vector<float> flattened (width*height*3);
+  auto index = 0;
+  for(auto h = 0; h<height; h++){
+      for(auto w=0; w<width; w++){
+        flattened[index*3 + 0] = texture->LUT[{h,w}].x;
+        flattened[index*3 + 1] = texture->LUT[{h,w}].y;
+        flattened[index*3 + 2] = texture->LUT[{h,w}].z;
+        index += 1;
     }
   }
-  std::cout<<"STEP 1 FINISHED"<<std::endl;
+  
+  //Compute histograms
+  std::vector<int> histogram_R (256);
+  std::vector<int> histogram_G (256);
+  std::vector<int> histogram_B (256);
 
-  //Build LUT per channel
-  auto sum_R = 0.0f;
-  std::vector <float> LUT_R (256);
-  auto sum_G = 0.0f;
-  std::vector <float> LUT_G (256);
-  auto sum_B = 0.0f;
-  std::vector <float> LUT_B (256);
+  for (auto i = 0; i<width*height; i++){
+    auto r = flattened[i*3 + 0];
+    auto g = flattened[i*3 + 1];
+    auto b = flattened[i*3 + 2];
+    flattened[i*3 + 0] = max(0, min(255, (int)floor(r * 255.0)));
+    flattened[i*3 + 1] = max(0, min(255, (int)floor(g * 255.0)));
+    flattened[i*3 + 2] = max(0, min(255, (int)floor(b * 255.0)));
+
+    histogram_R[flattened[i*3] + 0] += 1;
+    histogram_G[flattened[i*3] + 1] += 1;
+    histogram_B[flattened[i*3] + 2] += 1;
+
+  }
+
+  //Build LUTs
+  for(auto i = 1; i<256; i++){
+    histogram_R[i] += histogram_R[i-1];
+    histogram_G[i] += histogram_G[i-1];
+    histogram_B[i] += histogram_B[i-1];
+  }
+
+  texture->histogram_R.assign(256, 0);
+  texture->histogram_R = histogram_R;
+
+  texture->histogram_B.assign(256, 0);
+  texture->histogram_B = histogram_B;
+  
+  texture->histogram_G.assign(256, 0);
+  texture->histogram_G = histogram_G;
+
+  //Normalize and gaussianize LUTs
+  std::vector<float> lutF_R (256);
+  std::vector<float> lutF_G (256);
+  std::vector<float> lutF_B (256);
+
+  std::vector<int> lut_R (256);
+  std::vector<int> lut_G (256);
+  std::vector<int> lut_B (256);
 
   for(auto i=0; i<256; i++){
-    sum_R = sum_R + histogram_R[i];
-    LUT_R[i] = sum_R;
-    sum_G = sum_G + histogram_G[i];
-    LUT_G[i] = sum_G;
-    sum_B = sum_B + histogram_B[i];
-    LUT_B[i] = sum_B;
-  }
-  std::cout<<"STEP 2 FINISHED"<<std::endl;
+    lutF_R[i] = truncCdfInv((float)histogram_R[i]/(float)histogram_R[255], 1.0f/6.0f);
+    lutF_G[i] = truncCdfInv((float)histogram_G[i]/(float)histogram_G[255], 1.0f/6.0f);
+    lutF_B[i] = truncCdfInv((float)histogram_B[i]/(float)histogram_B[255], 1.0f/6.0f);
 
-  //Normalize and gaussianize LUT
-  for(auto i=0; i<256; i++){
-    LUT_R[i] = truncCdf(LUT_R[i]/sum_R, sigma);
-    LUT_G[i] = truncCdf(LUT_G[i]/sum_G, sigma);
-    LUT_B[i] = truncCdf(LUT_B[i]/sum_B, sigma);
-  }
-  std::cout<<"STEP 3 FINISHED"<<std::endl;
+    lut_R[i] = max(0, min(255, floor(255*lutF_R[i])));
+    lut_G[i] = max(0, min(255, floor(255*lutF_G[i])));
+    lut_B[i] = max(0, min(255, floor(255*lutF_B[i])));
 
-  //Apply LUT to texture
-  for(auto h=0; h<height; h++){
+  }
+
+  //Apply LUTs to flattened image representation
+  for(auto i = 0; i<width*height; i++){
+    flattened[i*3 + 0] = (float)lut_R[flattened[i*3 + 0]]/255.0f;
+    flattened[i*3 + 1] = (float)lut_G[flattened[i*3 + 1]]/255.0f;
+    flattened[i*3 + 2] = (float)lut_B[flattened[i*3 + 2]]/255.0f;
+  }
+
+  //Restore original image
+  index = 0;
+  for(auto h = 0; h<height; h++){
     for(auto w=0; w<width; w++){
-        auto r = (int)(texture->colorf[{h,w}].x * 255.0f);
-        auto g = (int)(texture->colorf[{h,w}].y * 255.0f);
-        auto b = (int)(texture->colorf[{h,w}].z * 255.0f);
-
-        texture->LUT[{h,w}].x = LUT_R[r];
-        texture->LUT[{h,w}].y = LUT_G[g];
-        texture->LUT[{h,w}].z = LUT_B[b];
+        texture->LUT[{h,w}].x = flattened[index*3 + 0] ;
+        texture->LUT[{h,w}].y = flattened[index*3 + 1] ;
+        texture->LUT[{h,w}].z = flattened[index*3 + 2] ;
+        index += 1;
     }
   }
-  material->color_tex = texture;
 
-  std::cout<<"Gaussianization completed"<<std::endl;
+  return texture;
 }
 
 // Add shape
@@ -2327,7 +2313,7 @@ void set_material(ptr::object* object, ptr::material* material) {
 }
 
 void texture_gaussianization(ptr::material* material, ptr::texture* color_tex){
-  gaussianization(material, color_tex);
+  material->gauss_tex = gaussianization(color_tex);
 }
 
 // Add material
