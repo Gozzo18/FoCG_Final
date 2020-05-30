@@ -254,9 +254,9 @@ void TriangleGrid(vec2i& vertex1,vec2i& vertex2,vec2i& vertex3, float& w1, float
     w1 = -temp.z ;
     w2 = 1.0 - temp.y;
     w3 = 1.0 - temp.x;
-    vertex1 = baseId + vec2i{1 , 1};
-    vertex2 = baseId + vec2i{1 , 0};
-    vertex3 = baseId + vec2i{0 , 1};
+    vertex1 = baseId + vec2i{1, 1};
+    vertex2 = baseId + vec2i{1, 0};
+    vertex3 = baseId + vec2i{0, 1};
   }
 }
 
@@ -341,7 +341,8 @@ static vec3f ProceduralTilingAndBlending(const ptr::texture* texture, const vec2
             lookup_texture(texture, {ii2, j2}, ldr_as_linear) * u2 * (1 - v2) +
             lookup_texture(texture, {ii2, jj2}, ldr_as_linear) * u2 * v2;
 
-  auto color = exp_weight1 *I1 + exp_weight2 *I2 + exp_weight3 *I3;
+  //auto color = exp_weight1 *I1 + exp_weight2 *I2 + exp_weight3 *I3;
+  auto color = w1 * I1 + w2 * I2 + w3 * I3;
   //Compute variance scale factor
   auto W = sqrt( pow(exp_weight1,2) + pow(exp_weight2,2) + pow(exp_weight3,2) );
   
@@ -370,9 +371,9 @@ static vec3f eval_texture(const ptr::texture* texture, const vec2f& uv,
   // get texture
   if (!texture) return {1, 1, 1};
 
-  //if(texture->name=="floor"){
-  //  return ProceduralTilingAndBlending(texture, uv, ldr_as_linear,clamp_to_edge);
-  //}else{
+  if(texture->name=="floor"){
+    return ProceduralTilingAndBlending(texture, uv, ldr_as_linear,clamp_to_edge);
+  }else{
      // get img::image width/height
     auto size = texture_size(texture);
 
@@ -400,7 +401,7 @@ static vec3f eval_texture(const ptr::texture* texture, const vec2f& uv,
            lookup_texture(texture, {i, jj}, ldr_as_linear) * (1 - u) * v +
            lookup_texture(texture, {ii, j}, ldr_as_linear) * u * (1 - v) +
            lookup_texture(texture, {ii, jj}, ldr_as_linear) * u * v;
-  //}
+  }
 }
 
 static float eval_texturef(const ptr::texture* texture, const vec2f& uv,
@@ -2186,6 +2187,7 @@ ptr::texture* gaussianization(ptr::texture* texture){
     auto r = flattened[i*3 + 0];
     auto g = flattened[i*3 + 1];
     auto b = flattened[i*3 + 2];
+    //Convert float to int values
     flattened[i*3 + 0] = max(0, min(255, (int)floor(r * 255.0)));
     flattened[i*3 + 1] = max(0, min(255, (int)floor(g * 255.0)));
     flattened[i*3 + 2] = max(0, min(255, (int)floor(b * 255.0)));
@@ -2193,10 +2195,9 @@ ptr::texture* gaussianization(ptr::texture* texture){
     histogram_R[flattened[i*3] + 0] += 1;
     histogram_G[flattened[i*3] + 1] += 1;
     histogram_B[flattened[i*3] + 2] += 1;
-
   }
 
-  //Build LUTs
+  //Initialize LUT'elements
   for(auto i = 1; i<256; i++){
     histogram_R[i] += histogram_R[i-1];
     histogram_G[i] += histogram_G[i-1];
@@ -2226,17 +2227,19 @@ ptr::texture* gaussianization(ptr::texture* texture){
     lutF_G[i] = truncCdfInv((float)histogram_G[i]/(float)histogram_G[255], 1.0f/6.0f);
     lutF_B[i] = truncCdfInv((float)histogram_B[i]/(float)histogram_B[255], 1.0f/6.0f);
 
-    lut_R[i] = max(0, min(255, floor(255*lutF_R[i])));
+    /*lut_R[i] = max(0, min(255, floor(255*lutF_R[i])));
     lut_G[i] = max(0, min(255, floor(255*lutF_G[i])));
-    lut_B[i] = max(0, min(255, floor(255*lutF_B[i])));
-
+    lut_B[i] = max(0, min(255, floor(255*lutF_B[i])));*/
+    lut_R[i] = truncCdf((float)histogram_R[i]/(float)histogram_R[255], 1.0f/6.0f);
+    lut_G[i] = truncCdf((float)histogram_G[i]/(float)histogram_G[255], 1.0f/6.0f);
+    lut_B[i] = truncCdf((float)histogram_B[i]/(float)histogram_B[255], 1.0f/6.0f);
   }
 
   //Apply LUTs to flattened image representation
   for(auto i = 0; i<width*height; i++){
-    flattened[i*3 + 0] = (float)lut_R[flattened[i*3 + 0]]/255.0f;
-    flattened[i*3 + 1] = (float)lut_G[flattened[i*3 + 1]]/255.0f;
-    flattened[i*3 + 2] = (float)lut_B[flattened[i*3 + 2]]/255.0f;
+    flattened[i*3 + 0] = lutF_R[flattened[i*3 + 0]];
+    flattened[i*3 + 1] = lutF_G[flattened[i*3 + 1]];
+    flattened[i*3 + 2] = lutF_B[flattened[i*3 + 2]];
   }
 
   //Restore original image
