@@ -341,26 +341,40 @@ static vec3f ProceduralTilingAndBlending(const ptr::texture* texture, const vec2
             lookup_texture(texture, {ii2, j2}, ldr_as_linear) * u2 * (1 - v2) +
             lookup_texture(texture, {ii2, jj2}, ldr_as_linear) * u2 * v2;
 
-  //auto color = exp_weight1 *I1 + exp_weight2 *I2 + exp_weight3 *I3;
-  auto color = w1 * I1 + w2 * I2 + w3 * I3;
+
+  auto color = exp_weight1 *I1 + exp_weight2 *I2 + exp_weight3 *I3;
+  
   //Compute variance scale factor
-  auto W = sqrt( pow(exp_weight1,2) + pow(exp_weight2,2) + pow(exp_weight3,2) );
+  /*auto W = sqrt( pow(exp_weight1,2) + pow(exp_weight2,2) + pow(exp_weight3,2) );
   
   //Restore contrast
   color.x = compute_contrast_perchannel(color.x, W);
   color.y = compute_contrast_perchannel(color.y, W);
-  color.z = compute_contrast_perchannel(color.z, W);
+  color.z = compute_contrast_perchannel(color.z, W);*/
 
   //De-gaussianize
-  auto r = max(0, min(255, (int)floor(color.x * 255.0)));
-  color.x = truncCdf( (float)texture->histogram_R[r]/(float)texture->histogram_R[255], 1.0f/6.0f);
+  /*auto r = max(0, min(255, (int)floor(color.x * 255.0)));
+  if(texture->mapping_R.count(r)==1){
+    color.x = truncCdf(color.x, 1.0f/6.0f);
+    r = max(0, min(255, (int)floor(color.x * 255.0)));
+    color.x = texture->mapping_R.find(r)->second;
+  }
   
   auto g = max(0, min(255, (int)floor(color.y * 255.0)));
-  color.y = truncCdf( (float)texture->histogram_G[g]/(float)texture->histogram_G[255], 1.0f/6.0f);
-  
+  //color.y = truncCdf( (float)texture->histogram_G[g]/(float)texture->histogram_G[255], 1.0f/6.0f);
+  if(texture->mapping_G.count(g)==1){
+    color.y = truncCdf(color.y, 1.0f/6.0f);
+    g = max(0, min(255, (int)floor(color.y * 255.0)));
+    color.y = texture->mapping_G.find(g)->second;
+  }
+
   auto b = max(0, min(255, (int)floor(color.z * 255.0)));
-  color.z = truncCdf( (float)texture->histogram_B[b]/(float)texture->histogram_B[255], 1.0f/6.0f);
-  
+  //color.z = truncCdf( (float)texture->histogram_B[b]/(float)texture->histogram_B[255], 1.0f/6.0f);
+  if(texture->mapping_B.count(b)==1){
+    color.z = truncCdf(color.z, 1.0f/6.0f);
+    b = max(0, min(255, (int)floor(color.z * 255.0)));
+    color.z = texture->mapping_B.find(b)->second;
+  }*/
   return color;
 }
 
@@ -2150,7 +2164,7 @@ ptr::texture* gaussianization(ptr::texture* texture){
   auto width = texture_size(texture).x;
   auto height = texture_size(texture).y;
 
-  //Initialize LUT texture
+  //Initialize LUT texture field
   texture->LUT.assign(texture_size(texture), zero3f);
   if (!texture->colorf.empty()) {
     for(auto h=0; h<height; h++){
@@ -2169,8 +2183,8 @@ ptr::texture* gaussianization(ptr::texture* texture){
   //Flatten image
   std::vector<float> flattened (width*height*3);
   auto index = 0;
-  for(auto h = 0; h<height; h++){
-      for(auto w=0; w<width; w++){
+  for(auto w=0; w<width; w++){
+    for(auto h = 0; h<height; h++){
         flattened[index*3 + 0] = texture->LUT[{h,w}].x;
         flattened[index*3 + 1] = texture->LUT[{h,w}].y;
         flattened[index*3 + 2] = texture->LUT[{h,w}].z;
@@ -2184,6 +2198,7 @@ ptr::texture* gaussianization(ptr::texture* texture){
   std::vector<int> histogram_B (256);
 
   for (auto i = 0; i<width*height; i++){
+    //Extract pixel value and convert it to integer
     auto r = flattened[i*3 + 0];
     auto g = flattened[i*3 + 1];
     auto b = flattened[i*3 + 2];
@@ -2191,64 +2206,72 @@ ptr::texture* gaussianization(ptr::texture* texture){
     flattened[i*3 + 0] = max(0, min(255, (int)floor(r * 255.0)));
     flattened[i*3 + 1] = max(0, min(255, (int)floor(g * 255.0)));
     flattened[i*3 + 2] = max(0, min(255, (int)floor(b * 255.0)));
-
+    //Update occurences
     histogram_R[flattened[i*3] + 0] += 1;
     histogram_G[flattened[i*3] + 1] += 1;
     histogram_B[flattened[i*3] + 2] += 1;
   }
 
-  //Initialize LUT'elements
   for(auto i = 1; i<256; i++){
     histogram_R[i] += histogram_R[i-1];
     histogram_G[i] += histogram_G[i-1];
     histogram_B[i] += histogram_B[i-1];
   }
 
-  texture->histogram_R.assign(256, 0);
-  texture->histogram_R = histogram_R;
-
-  texture->histogram_B.assign(256, 0);
-  texture->histogram_B = histogram_B;
-  
-  texture->histogram_G.assign(256, 0);
-  texture->histogram_G = histogram_G;
-
   //Normalize and gaussianize LUTs
   std::vector<float> lutF_R (256);
   std::vector<float> lutF_G (256);
   std::vector<float> lutF_B (256);
 
-  std::vector<int> lut_R (256);
-  std::vector<int> lut_G (256);
-  std::vector<int> lut_B (256);
+  std::vector<int> lutI_R (256); 
+  std::vector<int> lutI_G (256); 
+  std::vector<int> lutI_B (256); 
 
   for(auto i=0; i<256; i++){
     lutF_R[i] = truncCdfInv((float)histogram_R[i]/(float)histogram_R[255], 1.0f/6.0f);
     lutF_G[i] = truncCdfInv((float)histogram_G[i]/(float)histogram_G[255], 1.0f/6.0f);
     lutF_B[i] = truncCdfInv((float)histogram_B[i]/(float)histogram_B[255], 1.0f/6.0f);
 
-    /*lut_R[i] = max(0, min(255, floor(255*lutF_R[i])));
-    lut_G[i] = max(0, min(255, floor(255*lutF_G[i])));
-    lut_B[i] = max(0, min(255, floor(255*lutF_B[i])));*/
-    lut_R[i] = truncCdf((float)histogram_R[i]/(float)histogram_R[255], 1.0f/6.0f);
-    lut_G[i] = truncCdf((float)histogram_G[i]/(float)histogram_G[255], 1.0f/6.0f);
-    lut_B[i] = truncCdf((float)histogram_B[i]/(float)histogram_B[255], 1.0f/6.0f);
+    lutI_R[i] = max(0, min(255, floor(255.0 * lutF_R[i])));
+    lutI_G[i] = max(0, min(255, floor(255.0 * lutF_G[i])));
+    lutI_B[i] = max(0, min(255, floor(255.0 * lutF_B[i])));
   }
 
-  //Apply LUTs to flattened image representation
+  std::map<int, float> lutMapping_R;
+  std::map<int, float> lutMapping_G;
+  std::map<int, float> lutMapping_B;
+
+  //Apply gaussianization to flattened texture and fill LUT mappings
   for(auto i = 0; i<width*height; i++){
+    //Check if the lutI_R index is in the mapping
+    if(lutMapping_R.count(lutI_R[flattened[i*3 + 0]])==0){ // Not present
+      lutMapping_R.insert(std::pair<int, float>(lutI_R[flattened[i*3 + 0]], texture->LUT[i].x));
+    }
     flattened[i*3 + 0] = lutF_R[flattened[i*3 + 0]];
+
+    if(lutMapping_G.count(lutI_G[flattened[i*3 + 1]])==0){
+      lutMapping_G.insert(std::pair<int, float>(lutI_G[flattened[i*3 + 1]], texture->LUT[i].y));
+    }
     flattened[i*3 + 1] = lutF_G[flattened[i*3 + 1]];
+
+    if(lutMapping_B.count(lutI_B[flattened[i*3 + 2]]) == 0){
+      lutMapping_B.insert(std::pair<int, float>(lutI_B[flattened[i*3 + 2]], texture->LUT[i].z));
+    }
     flattened[i*3 + 2] = lutF_B[flattened[i*3 + 2]];
   }
 
+  //Store LUT mappings inside texture
+  texture->mapping_R = lutMapping_R;
+  texture->mapping_B = lutMapping_B;
+  texture->mapping_G = lutMapping_G;
+
   //Restore original image
   index = 0;
-  for(auto h = 0; h<height; h++){
-    for(auto w=0; w<width; w++){
-        texture->LUT[{h,w}].x = flattened[index*3 + 0] ;
-        texture->LUT[{h,w}].y = flattened[index*3 + 1] ;
-        texture->LUT[{h,w}].z = flattened[index*3 + 2] ;
+  for(auto w=0; w<width; w++){
+    for(auto h= 0; h<height; h++){
+        texture->LUT[{h,w}].x = flattened[index*3 + 0];
+        texture->LUT[{h,w}].y = flattened[index*3 + 1];
+        texture->LUT[{h,w}].z = flattened[index*3 + 2];
         index += 1;
     }
   }

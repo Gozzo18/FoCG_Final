@@ -8,18 +8,18 @@ int main(int argc, const char* argv[]) {
 
     bool ready_to_display = true;
 
-    std::string image_names[10] = {"01_brick_1920_1080.jpg",
-                                    "02_brick_1920_1080.jpg",
-                                      "03_crystal_1920_1080.jpg",
-                                       "04_blue_fabric_1920_1080.jpg",
-                                        "06_grass_1920_1080.jpg",
-                                         "07_leopard_1920_1080.jpg",
-                                          "08_mud_1920_1080.jpg",
-                                           "09_moon_1920_1080.jpg",
-                                            "10_sand_1920_1080.jpg",
-                                             "11_tree_1920_1080.jpg"};
+    std::vector<std::string> image_names;
+    image_names.push_back("01_brick_720_256.jpg");
+    image_names.push_back("02_brick_720_256.jpg");
+    image_names.push_back("03_crystal_720_256.jpg");
+    image_names.push_back("04_blue_fabric_720_256.jpg");
+    image_names.push_back("05_grass_720_256.jpg");
+    image_names.push_back("06_leopard_720_256.jpg");
+    image_names.push_back("07_mud_720_256.jpg");
+    image_names.push_back("08_moon_720_256.jpg");
+    image_names.push_back("09_tree_720_256.jpg");
 
-    for (int i = 0; i<10; i++){
+    for (int i = 0; i<image_names.size(); i++){
         auto current_path = std::string(std::experimental::filesystem::current_path().string().c_str());
         auto image_path = current_path.append("/out/lowres/");
         auto full_name = image_path.append(image_names[i]);
@@ -36,7 +36,7 @@ int main(int argc, const char* argv[]) {
     }
 
     if (ready_to_display){
-        for(int i = 0; i<10; i++){
+        for(int i = 0; i<image_names.size(); i++){
             auto current_path = std::string(std::experimental::filesystem::current_path().string().c_str());
             auto image_path = current_path.append("/out/lowres/");
             auto full_name = image_path.append(image_names[i]);
@@ -48,18 +48,21 @@ int main(int argc, const char* argv[]) {
             imshow( "Display window", image );                   // Show our image inside it.
 
             auto key = cv::waitKey(0); // Wait for a keystroke in the window
+            std::cout<<key<<std::endl;
             if (key == 81){ //Left arrow key pressed
                 if (i==0){
-                    i = 8;
+                    i = image_names.size()-2;
                 }else{
                     i -= 2;
                 }
             }else if (key==27 || key==255){ //Esc button pressed
                 return 0;
-            } 
+            }else if (key!=83){//Any other button is pressed, stat on the same image
+                i -= 1;
+            }
 
             //If the last image is reached, restart from 0
-            if(i==9){
+            if(i==image_names.size()-1){
                 i=-1;
             }  
         }

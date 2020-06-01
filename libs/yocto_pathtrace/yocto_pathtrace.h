@@ -277,10 +277,9 @@ struct texture {
   img::image<float> scalarf = {};
   img::image<byte>  scalarb = {};
   img::image<vec3f> LUT = {};
-  std::vector<int> histogram_R = {};
-  std::vector<int> histogram_G = {};
-  std::vector<int> histogram_B = {};
-
+  std::map<int, float> mapping_R;
+  std::map<int, float> mapping_G;
+  std::map<int, float> mapping_B;
 };
 
 // Material for surfaces, lines and triangles.

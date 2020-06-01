@@ -2,10 +2,8 @@
 ./bin/yscenetrace tests/02_brick/brick2.json -o out/lowres/02_brick_720_256.jpg -t path -s 256 -r 720
 ./bin/yscenetrace tests/03_crystal/crystal.json -o out/lowres/03_crystal_720_256.jpg -t path -s 256 -r 720
 ./bin/yscenetrace tests/04_blue_fabric/blue_fabric.json -o out/lowres/04_blue_fabric_720_256.jpg -t path -s 256 -r 720
-./bin/yscenetrace tests/05_carpet/carpet.json -o out/lowres/05_carpet_720_256.jpg -t path -s 256 -r 720
-./bin/yscenetrace tests/06_grass/grass.json -o out/lowres/06_grass_720_256.jpg -t path -s 256 -r 720
-./bin/yscenetrace tests/07_leopard/leopard.json -o out/lowres/07_leopard_720_256.jpg -t path -s 256 -r 720
-./bin/yscenetrace tests/08_mud/mud.json -o out/lowres/08_mud_720_256.jpg -t path -s 256 -r 720
-./bin/yscenetrace tests/09_moon/moon.json -o out/lowres/09_moon_720_256.jpg -t path -s 256 -r 720
-./bin/yscenetrace tests/10_sand/sand.json -o out/lowres/10_sand_720_256.jpg -t path -s 256 -r 720
-./bin/yscenetrace tests/11_tree/tree.json -o out/lowres/11_tree_720_256.jpg -t path -s 256 -r 720
+./bin/yscenetrace tests/05_grass/grass.json -o out/lowres/05_grass_720_256.jpg -t path -s 256 -r 720
+./bin/yscenetrace tests/06_leopard/leopard.json -o out/lowres/06_leopard_720_256.jpg -t path -s 256 -r 720
+./bin/yscenetrace tests/07_mud/mud.json -o out/lowres/07_mud_720_256.jpg -t path -s 256 -r 720
+./bin/yscenetrace tests/08_moon/moon.json -o out/lowres/08_moon_720_256.jpg -t path -s 256 -r 720
+./bin/yscenetrace tests/09_tree/tree.json -o out/lowres/09_tree_720_256.jpg -t path -s 256 -r 720
