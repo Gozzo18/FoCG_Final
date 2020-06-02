@@ -33,9 +33,9 @@
 #include <yocto/yocto_math.h>
 #include <yocto/yocto_shape.h>
 #include <yocto/yocto_sceneio.h>
-#include <yocto_pathtrace/yocto_pathtrace.h>
+#include <yocto_extension/yocto_extension.h>
 using namespace yocto::math;
-namespace ptr = yocto::pathtrace;
+namespace ptr = yocto::extension;
 namespace cli = yocto::commonio;
 namespace sio = yocto::sceneio;
 namespace shp = yocto::shape;

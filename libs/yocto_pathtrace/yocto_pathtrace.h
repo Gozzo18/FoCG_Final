@@ -46,8 +46,6 @@
 #include <future>
 #include <memory>
 
-#include <map>
-
 // -----------------------------------------------------------------------------
 // ALIASES
 // -----------------------------------------------------------------------------
@@ -109,13 +107,10 @@ void set_material(ptr::object* object, ptr::material* material);
 void set_shape(ptr::object* object, ptr::shape* shape);
 
 // texture properties
-void set_texture(ptr::texture* texture, const img::image<vec3b>& img, std::string name);
-void set_texture(ptr::texture* texture, const img::image<vec3f>& img, std::string name);
-void set_texture(ptr::texture* texture, const img::image<byte>& img, std::string name);
-void set_texture(ptr::texture* texture, const img::image<float>& img, std::string name);
-
-void texture_gaussianization(ptr::material* material, ptr::texture* color_tex);
-void gaussianization(ptr::material* material, ptr::texture* color_tex);
+void set_texture(ptr::texture* texture, const img::image<vec3b>& img);
+void set_texture(ptr::texture* texture, const img::image<vec3f>& img);
+void set_texture(ptr::texture* texture, const img::image<byte>& img);
+void set_texture(ptr::texture* texture, const img::image<float>& img);
 
 // material properties
 void set_emission(ptr::material* material, const vec3f& emission,
@@ -271,15 +266,10 @@ struct camera {
 // Texture containing either an LDR or HDR image. HdR images are encoded
 // in linear color space, while LDRs are encoded as sRGB.
 struct texture {
-  std::string       name = "";
   img::image<vec3f> colorf  = {};
   img::image<vec3b> colorb  = {};
   img::image<float> scalarf = {};
   img::image<byte>  scalarb = {};
-  img::image<vec3f> LUT = {};
-  std::map<int, float> mapping_R;
-  std::map<int, float> mapping_G;
-  std::map<int, float> mapping_B;
 };
 
 // Material for surfaces, lines and triangles.
@@ -305,8 +295,6 @@ struct material {
   // textures
   ptr::texture* emission_tex     = nullptr;
   ptr::texture* color_tex        = nullptr;
-  ptr::texture* gauss_tex        = nullptr;
-  ptr::texture* histogram        = nullptr;
   ptr::texture* specular_tex     = nullptr;
   ptr::texture* metallic_tex     = nullptr;
   ptr::texture* roughness_tex    = nullptr;

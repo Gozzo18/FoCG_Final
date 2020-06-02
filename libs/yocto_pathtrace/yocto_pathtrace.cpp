@@ -30,10 +30,6 @@
 
 #include <yocto/yocto_shape.h>
 
-#include <iostream>
-#include <set>
-#include <map>
-
 #include <atomic>
 #include <deque>
 #include <future>
@@ -105,82 +101,10 @@ static vec2i texture_size(const ptr::texture* texture) {
   }
 }
 
-float derf(float x) {
-    return 2.0/sqrt(math::pif)*exp(-x*x);
-}
-
-float custom_erf(float x){
-
-    auto a1 =  0.254829592f;
-    auto a2 = -0.284496736f;
-    auto a3 =  1.421413741f;
-    auto a4 = -1.453152027f;
-    auto a5 =  1.061405429f;
-    auto p  =  0.3275911f;
-
-    auto sign = x < 0 ? -1 : 1;
-
-    x = abs(x);
-    
-    auto t = 1.0f/(1.0f + p*x);
-    auto y = 1.0f - ((((a5*t + a4)*t + a3)*t + a2)*t + a1)*t*exp(-x*x);
-    
-    return sign*y;
-}
-float erfinv(float x){
-	float w, p;
-	w = -log((1.0f - x) * (1.0f + x));
-	if (w < 5.000000f)
-	{
-		w = w - 2.500000f;
-		p = 2.81022636e-08f;
-		p = 3.43273939e-07f + p * w;
-		p = -3.5233877e-06f + p * w;
-		p = -4.39150654e-06f + p * w;
-		p = 0.00021858087f + p * w;
-		p = -0.00125372503f + p * w;
-		p = -0.00417768164f + p * w;
-		p = 0.246640727f + p * w;
-		p = 1.50140941f + p * w;
-	}
-	else
-	{
-		w = sqrt(w) - 3.000000f;
-		p = -0.000200214257f;
-		p = 0.000100950558f + p * w;
-		p = 0.00134934322f + p * w;
-		p = -0.00367342844f + p * w;
-		p = 0.00573950773f + p * w;
-		p = -0.0076224613f + p * w;
-		p = 0.00943887047f + p * w;
-		p = 1.00167406f + p * w;
-		p = 2.83297682f + p * w;
-	}
-	return p * x;
-
-}
-float normalization_constant(float sigma) {
-  return 1.0f/custom_erf(0.5f / (sigma * sqrt(2.0f)));
-}
-
-float truncGaussian(float x, float sigma){
-  return normalization_constant(sigma) / (sigma * sqrt(2.0f*math::pif)) * exp(- (x - 0.5f) * (x - 0.5f) / (2.0f * sigma *sigma));
-}
-
-float truncCdf(float x, float sigma){
-  return 0.5f * (1.0f + normalization_constant(sigma) * custom_erf((x-0.5f) / (sigma*sqrt(2.0f))));
-}
-
-float truncCdfInv(float x, float sigma){
-  return 0.5f + sqrt(2) * sigma * erfinv((2.0f * x - 1.0f)/normalization_constant(sigma));
-}
-
 // Evaluate a texture
 static vec3f lookup_texture(
     const ptr::texture* texture, const vec2i& ij, bool ldr_as_linear = false) {
-  if(texture->name=="floor"){
-    return texture->LUT[ij];  
-  }else if (!texture->colorf.empty()) {
+  if (!texture->colorf.empty()) {
     return texture->colorf[ij];
   } else if (!texture->colorb.empty()) {
     return ldr_as_linear ? byte_to_float(texture->colorb[ij])
@@ -196,188 +120,6 @@ static vec3f lookup_texture(
   }
 }
 
-static float compute_contrast_perchannel(float linear_blended, float W){
-  
-  auto S_hat = 0.0f;
-
-  if (linear_blended < 0.5f){
-    if(linear_blended >= (2.0f * W)/4.0f){
-      S_hat = 1.0f/W * (linear_blended - 0.5f) + 0.5;
-    }else if(W >= (2.0f/3.0f)){
-      S_hat = 8 * (1.0f/W - 1.0f) * pow( (linear_blended/(2.0f-W)),2 ) + (3.0 - (2.0f/W))*(linear_blended/(2.0f-W));
-    }else if(linear_blended >= (2.0f - (3.0f*W))/4.0f){
-      S_hat = 1.0f/pow(W,2) * pow(linear_blended - ((2.0f-(3.0f*W))/4.0f),2);
-    }else{
-      S_hat = 0.0f;
-    }
-  }else{
-    if(1.0f - linear_blended >= (2.0f * W)/4.0f){
-      S_hat = 1.0f - (1.0f/W * (1.0f - linear_blended - 0.5f) + 0.5);
-    }else if(W >= (2.0f/3.0f)){
-      S_hat = 1.0f - (8 * (1.0f/W - 1.0f) * pow( (1.0f - linear_blended/(2.0f-W)),2 ) + (3.0 - (2.0f/W))*(1.0f - linear_blended/(2.0f-W)));
-    }else if(1.0f - linear_blended >= (2.0f - (3.0f*W))/4.0f){
-      S_hat = 1.0f - ( 1.0f/pow(W,2) * pow(1.0f - linear_blended - ((2.0f-(3.0f*W))/4.0f),2));
-    }else{
-      S_hat = 1.0f;
-    } 
-  }
-  return S_hat;
-}
-
-static vec2f fract(vec2f x){
-  return x - vec2f{floor(x.x), floor(x.y)};
-}
-
-void TriangleGrid(vec2i& vertex1,vec2i& vertex2,vec2i& vertex3, float& w1, float& w2, float& w3, const vec2f& uv){
-
-  //Scale input
-  auto temp_uv = uv;
-  //temp_uv *= vec2f{1.414f};
-  temp_uv *= vec2f{3.464f};
-  //temp_uv *= vec2f{9.464f};
-  //Skew input space
-  const auto gridToSkewGrid = math::mat2f(vec2f{1.0f, 0.0f}, vec2f{-0.57735027, 1.15470054});
-  auto skewedCoord = gridToSkewGrid * temp_uv;
-
-  //Compute local triangle verted IDs and local barycentric coordinates
-  auto baseId = vec2i{floor(skewedCoord.x), floor(skewedCoord.y)};
-  auto temp = vec3f{fract(skewedCoord), 0.0f};
-  temp.z = 1.0f - temp.x - temp.y;
-  if (temp.z > 0.0f){
-    w1 = temp.z;
-    w2 = temp.y;
-    w3 = temp.x;
-    vertex1 = baseId;
-    vertex2 = baseId + vec2i{0,1};
-    vertex3 = baseId + vec2i{1,0};
-  }else{
-    w1 = -temp.z ;
-    w2 = 1.0 - temp.y;
-    w3 = 1.0 - temp.x;
-    vertex1 = baseId + vec2i{1, 1};
-    vertex2 = baseId + vec2i{1, 0};
-    vertex3 = baseId + vec2i{0, 1};
-  }
-}
-
-static vec2f hash(vec2f p){
-  auto matrix = math::mat2f{vec2f{127.1f, 311.7f}, vec2f{269.5f, 183.3f}};
-  auto x = sin((p * matrix).x);
-  auto y = sin((p * matrix).y);
-  return fract( vec2f{x,y} * 43758.5453f);
-}
-
-static vec3f ProceduralTilingAndBlending(const ptr::texture* texture, const vec2f& uv, bool ldr_as_linear, bool clamp_to_edge){
-
-  auto size = texture_size(texture);
-  //Get random tiling from another paper
-  auto w1 = 0.f;
-  auto w2 = 0.f;
-  auto w3 = 0.f;
-  auto vertex1 = vec2i{0,0};
-  auto vertex2 = vec2i{0,0};
-  auto vertex3 = vec2i{0,0};
-  TriangleGrid(vertex1, vertex2, vertex3, w1, w2, w3, uv );
-
-  auto uv1 = uv + hash(vec2f{(float)vertex1.x, (float)vertex1.y});
-  auto uv2 = uv + hash(vec2f{(float)vertex2.x, (float)vertex2.y});
-  auto uv3 = uv + hash(vec2f{(float)vertex3.x, (float)vertex3.y});
-
-  auto s = 0.0f, t = 0.0f;
-  auto s1 = 0.0f, t1 = 0.0f;
-  auto s2 = 0.0f, t2 = 0.0f;
-  if (clamp_to_edge) {
-    s = clamp(uv1.x, 0.0f, 1.0f) * size.x;
-    t = clamp(uv1.y, 0.0f, 1.0f) * size.y;
-    s1 = clamp(uv2.x, 0.0f, 1.0f) * size.x;
-    t1 = clamp(uv2.y, 0.0f, 1.0f) * size.y;
-    s2 = clamp(uv3.x, 0.0f, 1.0f) * size.x;
-    t2 = clamp(uv3.y, 0.0f, 1.0f) * size.y;
-  } else {
-    s = fmod(uv1.x, 1.0f) * size.x;
-    if (s < 0) s += size.x;
-    t = fmod(uv1.y, 1.0f) * size.y;
-    if (t < 0) t += size.y;
-    s1 = fmod(uv2.x, 1.0f) * size.x;
-    if (s1 < 0) s1 += size.x;
-    t1 = fmod(uv2.y, 1.0f) * size.y;
-    if (t1 < 0) t1 += size.y;
-    s2 = fmod(uv3.x, 1.0f) * size.x;
-    if (s2 < 0) s2 += size.x;
-    t2 = fmod(uv3.y, 1.0f) * size.y;
-    if (t2 < 0) t2 += size.y;
-  }
-
-  // get img::image coordinates and residuals
-  auto i = clamp((int)s, 0, size.x - 1), j = clamp((int)t, 0, size.y - 1);
-  auto ii = (i + 1) % size.x, jj = (j + 1) % size.y;
-  auto u = s - i, v = t - j;
-
-  auto i1 = clamp((int)s1, 0, size.x - 1), j1 = clamp((int)t1, 0, size.y - 1);
-  auto ii1 = (i1 + 1) % size.x, jj1 = (j1 + 1) % size.y;
-  auto u1 = s1 - i1, v1 = t1 - j1;
-
-  auto i2 = clamp((int)s2, 0, size.x - 1), j2 = clamp((int)t2, 0, size.y - 1);
-  auto ii2 = (i2 + 1) % size.x, jj2 = (j2 + 1) % size.y;
-  auto u2 = s2 - i2, v2 = t2 - j2;
-
-  //Exponentiate weights
-  auto exp_weight1 = pow(w1,4) / ( pow(w1,4) + pow(w2,4) + pow(w3,4) );
-  auto exp_weight2 = pow(w2,4) / ( pow(w1,4) + pow(w2,4) + pow(w3,4) );
-  auto exp_weight3 = pow(w3,4) / ( pow(w1,4) + pow(w2,4) + pow(w3,4) );
-
-  auto I1 = lookup_texture(texture, {i, j}, ldr_as_linear) * (1 - u) * (1 - v) +
-            lookup_texture(texture, {i, jj}, ldr_as_linear) * (1 - u) * v +
-            lookup_texture(texture, {ii, j}, ldr_as_linear) * u * (1 - v) +
-            lookup_texture(texture, {ii, jj}, ldr_as_linear) * u * v;
-          
-  auto I2 = lookup_texture(texture, {i1, j1}, ldr_as_linear) * (1 - u1) * (1 - v1) +
-            lookup_texture(texture, {i1, jj1}, ldr_as_linear) * (1 - u1) * v1 +
-            lookup_texture(texture, {ii1, j1}, ldr_as_linear) * u1 * (1 - v1) +
-            lookup_texture(texture, {ii1, jj1}, ldr_as_linear) * u1 * v1;
-
-  auto I3 = lookup_texture(texture, {i2, j2}, ldr_as_linear) * (1 - u2) * (1 - v2) +
-            lookup_texture(texture, {i2, jj2}, ldr_as_linear) * (1 - u2) * v2 +
-            lookup_texture(texture, {ii2, j2}, ldr_as_linear) * u2 * (1 - v2) +
-            lookup_texture(texture, {ii2, jj2}, ldr_as_linear) * u2 * v2;
-
-
-  auto color = exp_weight1 *I1 + exp_weight2 *I2 + exp_weight3 *I3;
-  
-  //Compute variance scale factor
-  /*auto W = sqrt( pow(exp_weight1,2) + pow(exp_weight2,2) + pow(exp_weight3,2) );
-  
-  //Restore contrast
-  color.x = compute_contrast_perchannel(color.x, W);
-  color.y = compute_contrast_perchannel(color.y, W);
-  color.z = compute_contrast_perchannel(color.z, W);*/
-
-  //De-gaussianize
-  /*auto r = max(0, min(255, (int)floor(color.x * 255.0)));
-  if(texture->mapping_R.count(r)==1){
-    color.x = truncCdf(color.x, 1.0f/6.0f);
-    r = max(0, min(255, (int)floor(color.x * 255.0)));
-    color.x = texture->mapping_R.find(r)->second;
-  }
-  
-  auto g = max(0, min(255, (int)floor(color.y * 255.0)));
-  //color.y = truncCdf( (float)texture->histogram_G[g]/(float)texture->histogram_G[255], 1.0f/6.0f);
-  if(texture->mapping_G.count(g)==1){
-    color.y = truncCdf(color.y, 1.0f/6.0f);
-    g = max(0, min(255, (int)floor(color.y * 255.0)));
-    color.y = texture->mapping_G.find(g)->second;
-  }
-
-  auto b = max(0, min(255, (int)floor(color.z * 255.0)));
-  //color.z = truncCdf( (float)texture->histogram_B[b]/(float)texture->histogram_B[255], 1.0f/6.0f);
-  if(texture->mapping_B.count(b)==1){
-    color.z = truncCdf(color.z, 1.0f/6.0f);
-    b = max(0, min(255, (int)floor(color.z * 255.0)));
-    color.z = texture->mapping_B.find(b)->second;
-  }*/
-  return color;
-}
-
 // Evaluate a texture
 static vec3f eval_texture(const ptr::texture* texture, const vec2f& uv,
     bool ldr_as_linear = false, bool no_interpolation = false,
@@ -385,39 +127,34 @@ static vec3f eval_texture(const ptr::texture* texture, const vec2f& uv,
   // get texture
   if (!texture) return {1, 1, 1};
 
-  if(texture->name=="floor"){
-    return ProceduralTilingAndBlending(texture, uv, ldr_as_linear,clamp_to_edge);
-  }else{
-     // get img::image width/height
-    auto size = texture_size(texture);
+  // get yimg::image width/height
+  auto size = texture_size(texture);
 
-    // get coordinates normalized for tiling
-    auto s = 0.0f, t = 0.0f;
-    if (clamp_to_edge) {
-      s = clamp(uv.x, 0.0f, 1.0f) * size.x;
-      t = clamp(uv.y, 0.0f, 1.0f) * size.y;
-    } else {
-      s = fmod(uv.x, 1.0f) * size.x;
-      if (s < 0) s += size.x;
-      t = fmod(uv.y, 1.0f) * size.y;
-      if (t < 0) t += size.y;
-    }
-
-    // get img::image coordinates and residuals
-    auto i = clamp((int)s, 0, size.x - 1), j = clamp((int)t, 0, size.y - 1);
-    auto ii = (i + 1) % size.x, jj = (j + 1) % size.y;
-    auto u = s - i, v = t - j;
-
-    if (no_interpolation) return lookup_texture(texture, {i, j}, ldr_as_linear);
-
-    // handle interpolation
-    return lookup_texture(texture, {i, j}, ldr_as_linear) * (1 - u) * (1 - v) +
-           lookup_texture(texture, {i, jj}, ldr_as_linear) * (1 - u) * v +
-           lookup_texture(texture, {ii, j}, ldr_as_linear) * u * (1 - v) +
-           lookup_texture(texture, {ii, jj}, ldr_as_linear) * u * v;
+  // get coordinates normalized for tiling
+  auto s = 0.0f, t = 0.0f;
+  if (clamp_to_edge) {
+    s = clamp(uv.x, 0.0f, 1.0f) * size.x;
+    t = clamp(uv.y, 0.0f, 1.0f) * size.y;
+  } else {
+    s = fmod(uv.x, 1.0f) * size.x;
+    if (s < 0) s += size.x;
+    t = fmod(uv.y, 1.0f) * size.y;
+    if (t < 0) t += size.y;
   }
-}
 
+  // get yimg::image coordinates and residuals
+  auto i = clamp((int)s, 0, size.x - 1), j = clamp((int)t, 0, size.y - 1);
+  auto ii = (i + 1) % size.x, jj = (j + 1) % size.y;
+  auto u = s - i, v = t - j;
+
+  if (no_interpolation) return lookup_texture(texture, {i, j}, ldr_as_linear);
+
+  // handle interpolation
+  return lookup_texture(texture, {i, j}, ldr_as_linear) * (1 - u) * (1 - v) +
+         lookup_texture(texture, {i, jj}, ldr_as_linear) * (1 - u) * v +
+         lookup_texture(texture, {ii, j}, ldr_as_linear) * u * (1 - v) +
+         lookup_texture(texture, {ii, jj}, ldr_as_linear) * u * v;
+}
 static float eval_texturef(const ptr::texture* texture, const vec2f& uv,
     bool ldr_as_linear = false, bool no_interpolation = false,
     bool clamp_to_edge = false) {
@@ -628,7 +365,6 @@ static brdf eval_brdf(const ptr::object* object, int element, const vec2f& uv,
               eval_texture(material->color_tex, texcoord, false);
   auto specular = material->specular *
                   eval_texture(material->specular_tex, texcoord, true).x;
-
   auto metallic = material->metallic *
                   eval_texture(material->metallic_tex, texcoord, true).x;
   auto roughness = material->roughness *
@@ -2128,155 +1864,29 @@ void set_focus(ptr::camera* camera, float aperture, float focus) {
 }
 
 // Add texture
-void set_texture(ptr::texture* texture, const img::image<vec3b>& img, std::string name) {
-  texture->name = name;
+void set_texture(ptr::texture* texture, const img::image<vec3b>& img) {
   texture->colorb  = img;
   texture->colorf  = {};
   texture->scalarb = {};
   texture->scalarf = {};
 }
-
-void set_texture(ptr::texture* texture, const img::image<vec3f>& img, std::string name) {
-  texture->name = name;
+void set_texture(ptr::texture* texture, const img::image<vec3f>& img) {
   texture->colorb  = {};
   texture->colorf  = img;
   texture->scalarb = {};
   texture->scalarf = {};
 }
-
-void set_texture(ptr::texture* texture, const img::image<byte>& img, std::string name) {
-  texture->name = name;  
+void set_texture(ptr::texture* texture, const img::image<byte>& img) {
   texture->colorb  = {};
   texture->colorf  = {};
   texture->scalarb = img;
   texture->scalarf = {};
 }
-void set_texture(ptr::texture* texture, const img::image<float>& img, std::string name) {
-  texture->name = name;  
+void set_texture(ptr::texture* texture, const img::image<float>& img) {
   texture->colorb  = {};
   texture->colorf  = {};
   texture->scalarb = {};
   texture->scalarf = img;
-}
-
-ptr::texture* gaussianization(ptr::texture* texture){
-
-  auto width = texture_size(texture).x;
-  auto height = texture_size(texture).y;
-
-  //Initialize LUT texture field
-  texture->LUT.assign(texture_size(texture), zero3f);
-  if (!texture->colorf.empty()) {
-    for(auto h=0; h<height; h++){
-      for(auto w=0; w<width; w++){
-        texture->LUT[{h,w}] = texture->colorf[{h,w}];
-      }
-    }
-  } else if (!texture->colorb.empty()) {
-      for(auto h=0; h<height; h++){
-        for(auto w=0; w<width; w++){
-        texture->LUT[{h,w}] = byte_to_float(texture->colorb[{h,w}]); 
-      }
-    }
-  }
-
-  //Flatten image
-  std::vector<float> flattened (width*height*3);
-  auto index = 0;
-  for(auto w=0; w<width; w++){
-    for(auto h = 0; h<height; h++){
-        flattened[index*3 + 0] = texture->LUT[{h,w}].x;
-        flattened[index*3 + 1] = texture->LUT[{h,w}].y;
-        flattened[index*3 + 2] = texture->LUT[{h,w}].z;
-        index += 1;
-    }
-  }
-  
-  //Compute histograms
-  std::vector<int> histogram_R (256);
-  std::vector<int> histogram_G (256);
-  std::vector<int> histogram_B (256);
-
-  for (auto i = 0; i<width*height; i++){
-    //Extract pixel value and convert it to integer
-    auto r = flattened[i*3 + 0];
-    auto g = flattened[i*3 + 1];
-    auto b = flattened[i*3 + 2];
-    //Convert float to int values
-    flattened[i*3 + 0] = max(0, min(255, (int)floor(r * 255.0)));
-    flattened[i*3 + 1] = max(0, min(255, (int)floor(g * 255.0)));
-    flattened[i*3 + 2] = max(0, min(255, (int)floor(b * 255.0)));
-    //Update occurences
-    histogram_R[flattened[i*3] + 0] += 1;
-    histogram_G[flattened[i*3] + 1] += 1;
-    histogram_B[flattened[i*3] + 2] += 1;
-  }
-
-  for(auto i = 1; i<256; i++){
-    histogram_R[i] += histogram_R[i-1];
-    histogram_G[i] += histogram_G[i-1];
-    histogram_B[i] += histogram_B[i-1];
-  }
-
-  //Normalize and gaussianize LUTs
-  std::vector<float> lutF_R (256);
-  std::vector<float> lutF_G (256);
-  std::vector<float> lutF_B (256);
-
-  std::vector<int> lutI_R (256); 
-  std::vector<int> lutI_G (256); 
-  std::vector<int> lutI_B (256); 
-
-  for(auto i=0; i<256; i++){
-    lutF_R[i] = truncCdfInv((float)histogram_R[i]/(float)histogram_R[255], 1.0f/6.0f);
-    lutF_G[i] = truncCdfInv((float)histogram_G[i]/(float)histogram_G[255], 1.0f/6.0f);
-    lutF_B[i] = truncCdfInv((float)histogram_B[i]/(float)histogram_B[255], 1.0f/6.0f);
-
-    lutI_R[i] = max(0, min(255, floor(255.0 * lutF_R[i])));
-    lutI_G[i] = max(0, min(255, floor(255.0 * lutF_G[i])));
-    lutI_B[i] = max(0, min(255, floor(255.0 * lutF_B[i])));
-  }
-
-  std::map<int, float> lutMapping_R;
-  std::map<int, float> lutMapping_G;
-  std::map<int, float> lutMapping_B;
-
-  //Apply gaussianization to flattened texture and fill LUT mappings
-  for(auto i = 0; i<width*height; i++){
-    //Check if the lutI_R index is in the mapping
-    if(lutMapping_R.count(lutI_R[flattened[i*3 + 0]])==0){ // Not present
-      lutMapping_R.insert(std::pair<int, float>(lutI_R[flattened[i*3 + 0]], texture->LUT[i].x));
-    }
-    flattened[i*3 + 0] = lutF_R[flattened[i*3 + 0]];
-
-    if(lutMapping_G.count(lutI_G[flattened[i*3 + 1]])==0){
-      lutMapping_G.insert(std::pair<int, float>(lutI_G[flattened[i*3 + 1]], texture->LUT[i].y));
-    }
-    flattened[i*3 + 1] = lutF_G[flattened[i*3 + 1]];
-
-    if(lutMapping_B.count(lutI_B[flattened[i*3 + 2]]) == 0){
-      lutMapping_B.insert(std::pair<int, float>(lutI_B[flattened[i*3 + 2]], texture->LUT[i].z));
-    }
-    flattened[i*3 + 2] = lutF_B[flattened[i*3 + 2]];
-  }
-
-  //Store LUT mappings inside texture
-  texture->mapping_R = lutMapping_R;
-  texture->mapping_B = lutMapping_B;
-  texture->mapping_G = lutMapping_G;
-
-  //Restore original image
-  index = 0;
-  for(auto w=0; w<width; w++){
-    for(auto h= 0; h<height; h++){
-        texture->LUT[{h,w}].x = flattened[index*3 + 0];
-        texture->LUT[{h,w}].y = flattened[index*3 + 1];
-        texture->LUT[{h,w}].z = flattened[index*3 + 2];
-        index += 1;
-    }
-  }
-
-  return texture;
 }
 
 // Add shape
@@ -2336,10 +1946,6 @@ void set_shape(ptr::object* object, ptr::shape* shape) {
 }
 void set_material(ptr::object* object, ptr::material* material) {
   object->material = material;
-}
-
-void texture_gaussianization(ptr::material* material, ptr::texture* color_tex){
-  material->gauss_tex = gaussianization(color_tex);
 }
 
 // Add material
