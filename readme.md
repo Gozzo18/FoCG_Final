@@ -108,7 +108,7 @@ Starting Texture                                      |  Final scene
 
 As a whole, it is very easy to notice that the absence of the contrast restoration produced less vivid colors for all the images. If we instead analyze each image more in depth we see that:
 - The first image, if compared with the one in the previous section, has now much more visible tiles' boundaries.
-- The second image instead has still many problems (ghosting, wrong blending, irregular shape of tiles) but we are pretty confident that this is due to the texture itself. Indeed, the same identical problems are present also in the implementation by [Benedikt Bitterli] (https://benedikt-bitterli.me/histogram-tiling/). Loading the exact same texture will provide the same problems.
+- The second image instead has still many problems (ghosting, wrong blending, irregular shape of tiles) but we are pretty confident that this is due to the texture itself. Indeed, the same identical problems are present also in the implementation by [Benedikt Bitterli](https://benedikt-bitterli.me/histogram-tiling/). Loading the exact same texture will provide the same problems.
 - For all the other remaining images, except for the contrast, they seems to us to be somehow acceptable.
 
 We conclude by stating that the time required to gaussianize each texture ranged from 77ms (textures of size 256x256) to 812ms (textures of size 2048x2048). The hardware used is very old and in particular not appropiate for these type of operations, hence we believe that these numbers might be much lower.
