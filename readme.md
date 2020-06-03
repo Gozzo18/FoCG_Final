@@ -1,14 +1,14 @@
 # Yocto/PathExtension: On Histogram-preserving Blending for Randomized Texture Tiling
 ## Riccard Gozzovelli - 1849977
 
-In this project we will present a possible implementation of how Texture Synthesis can be achieved for the Yocto/GL library. The main reference paper used is the one proposed by the [Walt Disney Animation Studios](http://www.jcgt.org/published/0008/04/02/paper.pdf) in 2019 which in turn, tried to enhance the already good results obtained by [Heitz and Neyret](https://hal.inria.fr/hal-01824773) in 2018.
+In this project we will present an extension for the Yocto/GL library regarding a possible implementation for **Texture Synthesis**. The main reference paper used is the one proposed by the [Walt Disney Animation Studios](http://www.jcgt.org/published/0008/04/02/paper.pdf) in 2019 which in turn, tried to enhance the already good results obtained by [Heitz and Neyret](https://hal.inria.fr/hal-01824773) in 2018.
 
-We will provide first a small introduction about what Texture Synthesis is and how it can be effectively confronted. We will then illustrate our implementation and the results obtained with the help of some images.
+We will provide first a small introduction about what Texture Synthesis is and how it can be effectively achieved. We will then illustrate our implementation and the results obtained with the help of some images.
 
 ## Introduction
-Texture mapping is that method that allows to map the pixels of a texture to a 3D surface. Independently from the available resources, being able to create highly realistic scenes with many elements and high-resolution textures is always very difficult. Most of the time infact, textures are hand-painted and therefore small in size. If not properly handled, it will be possible to notice every single patch of the original texture applied to the object. To avoid this effect many techniques have been developed, combine two or multiple layers of the same texture with slight offsets, use random noise function to obtain different patterns or resynthesize similar looking textures. In any case we always look for methods that are fast and that can produce photo-realistic results.
+Texture mapping is that method that allows to map the pixels of a texture to a 3D surface. Independently from the available resources, being able to create highly realistic scenes with many elements and high-resolution textures is always very difficult. Most of the time infact, textures are hand-painted and therefore small in size. If not properly handled, it will be possible to notice the single patch of the original texture applied to the object. To avoid this effect many techniques have been developed, for instance combining two or multiple layers of the same texture with slight offsets, use random noise function to obtain different patterns or resynthesize similar looking textures. In any case we always look for methods that are fast and that can produce photo-realistic results.
 
-Texture Synthesis is another possible method involved in generating large images starting from small ones. *Perlin* or *Worley* noise are probably the oldest methods that tried to achieve procedural textures by exploiting **noise functions**. But using those methods for real-time renderings it's a very bad choiche since their speed perfomances are very poor. That's why in 2018, Eric Heitz and Fabrice Neyret proposed a novel way to generate good-looking large texture in a very short time. One year later this method was enhanced to make it more efficient (faster and less memory demanding) but also to address different needs like handling high-resolution textures (4096x4096) and grayscale textures.
+Texture Synthesis is another possible method which consists of generating large images starting from small ones. *Perlin* or *Worley* noise are probably the oldest methods that tried to achieve procedural textures by exploiting **noise functions**. Using those methods for real-time renderings it's a very bad choiche since their speed perfomances are very poor. That's why in 2018, Eric Heitz and Fabrice Neyret proposed a novel way to generate good-looking large textures in a very short time. One year later this method was enhanced to make it more efficient (faster and less memory demanding) but also to address different needs like handling high-resolution textures (4096x4096) and grayscale textures.
 
 ### Implementation
 The way in which this method is implemented is straight-forward. It consists of two main operations:
@@ -23,14 +23,14 @@ The first step of the method is to gaussianize the texture immediately after hav
  - to pass from original to gaussian values we transform each texel through the CDF of the input histogram to produce a uniform distribution and then we compute the inverse CDF of it;
  - to pass from gaussian to original values we invert the previous computation.
 
-Therefore the informations that we want to store inside the Texture struct (defined inside *yocto_pathrace.h*) are the mappings between transformed values, one per channel, and the gaussianized image (that we call *LUT*). The formers are stored as map structures, the key of each map is the gaussianized color of the texture in range [0,255] while the value memorizes the original value. 
-The full algorithm starts at line 2147 (*yocto_pathtrace.cpp*) and it is implemented as follows:
+Therefore the informations that we want to store inside the Texture struct (defined inside *yocto_extension.h*) are the mappings between transformed values, one per channel, and the gaussianized image (that we will call *LUT*). The formers are stored as map structures, the key of each map is the gaussianized color of the texture in range [0,255] while the value is the original texel value. 
+The full algorithm starts at line 21 (*yocto_extension.cpp*) and it is implemented as follows:
 
 - Check whether the image colors are represented in a floating point or a byte representation. In the latter case convert each byte to the correspondent float. Use these temporary values to initialize the attribute *LUT* of the Texture struct.
 
 - Flatten the image passing from an *image<vec3f>* representation to a simple one dimensional array.
 
-- Loop over each element of the array, normalize the value in the range [0, 255] so as to use the value as an index for the corresponding *histogram_X* ( with X = {R,G,B} ) array and update the number of occurences for that index.
+- For each element of the array, normalize the value in the range [0, 255] so as to use the value as an index for the corresponding *histogram_X* ( with X = {R,G,B} ) array and update the number of occurences for that index.
 
 - Loop over the elements in *histogram_X* and update the value of each element *i* as the sum of the current with the previous one *i-1*.
 
@@ -49,27 +49,27 @@ The idea behind texture gaussianization is to make the histogram's channels of t
 ![Image](images/texture_gaussianization1.png)
 
 From left to right we have:
-- The first image is the one obtained with the Yocto/GL implementation of the previous algorithm. It is possible to notice two things. The first one is that the patches of the original texture can be easily detected. The second is that the channels' histograms are gaussian but not all at the same level. We are sure that this is due to the presence of two area-lights in the scene that modify the value of all the pixels hit by them.
+- The first image is the one obtained with the Yocto/GL extension of the previous algorithm. It is possible to notice two things. The first one is that the patches of the original texture can be still easily detected. The second is that the channels' histograms are gaussian but not all at the same level. We are sure that this is due to the presence of the area-lights and the sky in the scene that modify the values of the pixels.
 - The second image is the original texture used. Notice that the channels' histograms are not gaussian at all. 
-- The third image was produced in order to prove that the first image is correct. These images are infact obtained in the same identical way to the original but without applying them to an object.
+- The third image was produced in order to prove that the first image is correct. These images are infact obtained with the same exact procedure of the original but without applying them to an object.
 
 We conclude by pointing out that we used a *Truncated Gaussian Distribution* as described in the main reference paper in order to avoid possible clipping artifacts. The Truncated Gaussian Distribution is defined only in the range [0,1] and not [-inf, +inf] as the typical Gaussian Distribution.
 
 #### Histogram-preserving blending
-The second step of the method consists of adopting a random tiling procedure before blending the texels together. The random tiling procedure uses an equilater-triangle lattice in such a way to obtain a triangle grid. Given a point in the uv space, we can compute the local triangle to which it belongs and the barycentric coordinates inside of it. This will guarantee that each point is always covered by three tiles. A visual example of what we want to achieve is the following:
+The second step of the method consists of adopting a random tiling procedure before blending the texels together. The random tiling procedure uses an equilater-triangle lattice in such a way to obtain a triangle grid. Given a point in the uv space, we can compute the local triangle to which it belongs and the barycentric coordinates of the triangle. This will guarantee that each point is always covered by three tiles. A visual example of what we want to achieve is the following:
 
 ![Image](images/tiling_and_blending.png)
 
 To provide randomness, the vertices of the triangle in the grid are altered by a small offset. The full algorithm starts at line 270 and works in this way:
 
-- For a given point in the uv space we initialize the vertices of the triangles in which it is contained and the local barycentric coordinates.
+- For a given point in the uv space we initialize the vertices of the triangle in which it is contained and the local barycentric coordinates.
 
-- The function **TriangleGrid** is called and will compute the vertices of the triangles and the barycentric coordinates.
-    * The uv point is scaled by a factor 2*sqrt(3) which controls the height of the hexagonal tiles. Lower values will capture more large-scale features but it might procedure texture repetition effects. Greater values will instead increase the variety of the tiles but might miss large-scale features.
+- The function **TriangleGrid** is called and it will compute the vertices of the triangles and the barycentric coordinates.
+    * The uv point is scaled by a factor 2*sqrt(3) which controls the height of the hexagonal tiles. Lower values will capture more large-scale features but it might profuce texture repetition effects. Greater values will instead increase the variety of the tiles but might miss large-scale features.
 
-    * The triangle grid is then created and the triangle vertices and barycentric coordinates are computed.
+    * The triangle grid is then created and the triangle vertices together with barycentric coordinates are computed.
 
-- The triangle vertices are then modified by a random offset thanks to the function **hash**.
+- The triangle vertices are then modified by a random offset thanks to the **hash** function.
 
 - The input texture is fetched three times (I<sub>1</sub>,I<sub>2</sub>,I<sub>3</sub>) using the exact same procedure originally used in the **eval_texture** function.
 
@@ -82,17 +82,17 @@ Normal tiling                     |  Randomized tiling
 ![Image](images/n_blending3.jpg)  |  ![Image](images/l_blending3.jpg)
 ![Image](images/n_blending4.jpg)  |  ![Image](images/l_blending4.jpg)
 
-Texture repetitions are not visible anymore but some very strong ghosting effects are present, in particular for the first and the fourth image, but also heterogeneous contranst. To solve both this problems we add to the previous algorithm the following step:
+Texture repetitions are not visible anymore but some very strong ghosting effects are present, in particular for the first and the fourth image, and it is also possible to notice that the contrast is heterogeneous. To solve the first problem we add the following step:
 
 - Before linearly blending the three texture point, exponentiate the barycentric coordinates with a value of **γ**. A good value for it proved to be γ=4. This is particular useful for textures that present defined pattern, like the first image, which are not completely stochastics.
 
-As a last step, if we were to follow till the very end the reference paper, the only two operations to implement are contrast and histogram restorations. Unfortunately we had some problems that we were not able to fix. In particular:
+For the contrast problem we will had to implement the operations for contrast and histogram restoration. Unfortunately we had some problems that we were not able to fix. In particular:
 
 - When contrast restoration was applied to stochastic textures, the hexagonal pattern produced by the random tiling procedure showed up.
 
-- Histogram restoration instead completely change the colors of each pixel.
+- Histogram restoration instead completely changed the colors of each pixel producing completely wrong scenes.
 
-Still, the code for this two operations has been implemented even though is non-functioning. With this in mind the final results obtained are these:
+Therefore we preferred to avoid the use of these two operations even though they are present in code. With this in mind the final results obtained are these:
 
 Starting Texture                                      |  Final scene
 :----------------------------------------------------:|:--------------------------------------------:
@@ -106,10 +106,10 @@ Starting Texture                                      |  Final scene
 ![Image](images/output/mud/I_mud.jpg)                 | ![Image](images/output/mud/F_mud.jpg)
 ![Image](images/output/wood/I_wood.jpg)               | ![Image](images/output/wood/F_wood.jpg)
 
-As a whole, it is very easy to notice that the absence of the contrast restoration operation produced less vivid colors for all the images. If we instead analyze each image more in depth we see that:
+As a whole, it is very easy to notice that the absence of the contrast restoration produced less vivid colors for all the images. If we instead analyze each image more in depth we see that:
 - The first image, if compared with the one in the previous section, has now much more visible tiles' boundaries.
-- The second image instead has still many problems (ghosting, wrong blending, irregular shape of tiles) but we are pretty confident that this is due to the texture itself. Indeed, the same identical problems are present also in this implementation by [Benedikt Bitterli] (https://benedikt-bitterli.me/histogram-tiling/). Loading the exact same texture will provide the same problems.
-- For all the other remaining images, except for the contrast, seems to us somehow acceptable.
+- The second image instead has still many problems (ghosting, wrong blending, irregular shape of tiles) but we are pretty confident that this is due to the texture itself. Indeed, the same identical problems are present also in the implementation by [Benedikt Bitterli] (https://benedikt-bitterli.me/histogram-tiling/). Loading the exact same texture will provide the same problems.
+- For all the other remaining images, except for the contrast, they seems to us to be somehow acceptable.
 
 We conclude by stating that the time required to gaussianize each texture ranged from 77ms (textures of size 256x256) to 812ms (textures of size 2048x2048). The hardware used is very old and in particular not appropiate for these type of operations, hence we believe that these numbers might be much lower.
 
@@ -125,4 +125,3 @@ The last part of the project consisted in implementing something that allow the 
 
 OPTIONAL) It might be required to also execute the following command $export MESA_GL_VERSION_OVERRIDE=3.3  in case of related errors.
 ```
- 
