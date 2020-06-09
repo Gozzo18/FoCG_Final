@@ -1,5 +1,5 @@
-# Yocto/PathExtension: On Histogram-preserving Blending for Randomized Texture Tiling
-## Riccard Gozzovelli - 1849977
+# Final Progject - Yocto/PathExtension: On Histogram-preserving Blending for Randomized Texture Tiling
+## 1849977
 
 In this project we will present an extension for the Yocto/GL library regarding a possible implementation for **Texture Synthesis**. The main reference paper used is the one proposed by the [Walt Disney Animation Studios](http://www.jcgt.org/published/0008/04/02/paper.pdf) in 2019 which in turn, tried to enhance the already good results obtained by [Heitz and Neyret](https://hal.inria.fr/hal-01824773) in 2018.
 
